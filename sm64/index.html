@@ -1,76 +1,338 @@
-<!Doctype html>
+<!doctype html>
 <html lang="en-us">
   <head>
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Google Drive</title>
-    <link rel="shortcut icon" href="n.png">
+    <meta content="SM64" property="og:title">
+    <meta content="made in javascript" property="og:description">
+    <meta content="https://cavestory.gitlab.io/icon.png" property='og:image'>
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0"/>
+    <link rel="manifest" href="/appmanifest.json">
+    <script async src="https://unpkg.com/pwacompat" crossorigin="anonymous"></script>
+    <title>SM64</title>
     <style>
-      body, html{
-        margin: 0;
-        padding: 0;
-        width: 100vw;
-        min-height: 100vh;
-        font-family: Arial, Helvetica, sans-serif;
-        color: white;
+      body {
         background-color: black;
+        color: white;
+        font-family: 'Courier New', monospace;
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      canvas.emscripten {
+        border: 0 none;
+        width: 320px;
+        height: 240;
+        image-rendering: -moz-crisp-edges;
         image-rendering: pixelated;
-        scrollbar-width: none;
+        object-fit: contain;
+        margin: auto;
+        max-width: none !important;
       }
-      ::-webkit-scrollbar {
-        display: none;
-      }
-      #container {
-        width: 100vw;
-        height: 100vh;
+      .centerbox {
         display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        top: 0;
+      }
+      .dlbox-inner {
+        user-select: none;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        width: 256px;
+        height: 64px;
+        background-color: #000033;
+      }
+      .control-left {
+        touch-action: none;
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+        position: fixed;
+        left: 16px;
+        bottom: 16px;
+      }
+      .control-top-right {
+        touch-action: none;
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+        position: fixed;
+        right: 16px;
+        top: 16px;
+      }
+      .control-right {
+        touch-action: none;
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+        position: fixed;
+        right: 16px;
+        bottom: 16px;
+      }
+      .control-btn-small, .control-btn-big {
+        opacity: 0.4;
+      }
+      .control-btn-small {
+        touch-action: none;
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+        display: inline-flex;
         align-items: center;
         justify-content: center;
+        width: 64px;
+        height: 64px;
+        background-image: url("button.png");
+        background-position: 0px 0px;
+        background-repeat: no-repeat;
       }
-      canvas {
-        width: 100vw;
-        height: 100vh;
+      .control-btn-small:active {
+        background-position: 0px -128px;
+      }
+      .control-btn-big {
+        touch-action: none;
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 80px;
+        height: 64px;
+        background-image: url("button.png");
+        background-position: -64px 0px;
+        background-repeat: no-repeat;
+      }
+      .control-btn-big:active {
+        background-position: -64px -128px;
       }
     </style>
   </head>
   <body>
-    <div id="container">
-      <canvas class="emscripten" id="canvas"></canvas>
+    <div class="centerbox">
+      <div class="dlbox-inner">
+        <div class="emscripten" id="status">loading...</div>
+        <div class="emscripten">
+          <progress value="0" max="100" id="progress"></progress>
+        </div>
+      </div>
+    </div>
+    <div class="centerbox">
+      <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()"></canvas>
     </div>
     <script type='text/javascript'>
       var Module = {
         preRun: [],
         postRun: [],
-        print: (function() {
-          return function(text) {
-            if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(' ');
-            console.log(text);
+        print: (function () {
+          return function (text) {
           };
         })(),
-        printErr: function(text) {
-          if (arguments.length > 1)
+        printErr: function (text) {
+          if (arguments.length > 1) 
             text = Array.prototype.slice.call(arguments).join(' ');
           console.error(text);
         },
-        canvas: (function() {
+        canvas: (function () {
           var canvas = document.getElementById('canvas');
-          canvas.width = window.innerWidth; // Todo: how to do this from c++
-          canvas.height = window.innerHeight;
-          canvas.addEventListener("webglcontextlost", function(e) {
+          canvas.addEventListener("webglcontextlost", function (e) {
             alert('WebGL context lost. You will need to reload the page.');
             e.preventDefault();
           }, false);
           return canvas;
         })(),
-        setStatus: function(text) {
+        setStatus: function (text) {
+          if (!Module.setStatus.last) 
+            Module.setStatus.last = { time: Date.now(), text: '' };
+          if (text === Module.setStatus.last.text) 
+            return;
+          var m = text.match(/([^(]+)\((\d+(\.\d+)?)\/(\d+)\)/);
+          var now = Date.now();
+          if (m && now - Module.setStatus.last.time < 30) 
+            return;
+          Module.setStatus.last.time = now;
+          Module.setStatus.last.text = text;
+          if (m) {
+            text = m[1];
+            progressElement.value = parseInt(m[2]) * 100;
+            progressElement.max = parseInt(m[4]) * 100;
+            progressElement.hidden = false;
+          } else {
+            progressElement.value = null;
+            progressElement.max = null;
+            progressElement.hidden = true;
+            statusElement.innerHTML = text;
+          }
+        },
+        totalDependencies: 0,
+        monitorRunDependencies: function (left) {
+          this.totalDependencies = Math.max(this.totalDependencies, left);
+          Module.setStatus(left ? 'finishing... (' + (this.totalDependencies - left) + '/' + this.totalDependencies + ')' : 'loading complete.');
         }
       };
+      screen.orientation.lock('landscape');
+      Module.setStatus('Downloading...');
+      window.onerror = function () {
+        Module.setStatus('Error occured, check JavaScript console');
+        Module.setStatus = function (text) {
+          if (text) Module.printErr('[post-exception status] ' + text);
+        };
+      };
+
+      function resumeAudio(e) {
+        if (typeof Module === 'undefined' || typeof Module.SDL2 == 'undefined' || typeof Module.SDL2.audioContext == 'undefined') 
+          return;
+        if (Module.SDL2.audioContext.state == 'suspended') {
+          Module.SDL2.audioContext.resume();
+        }
+        if (Module.SDL2.audioContext.state == 'running') {
+          document.getElementById('canvas').removeEventListener('click', resumeAudio);
+          document.removeEventListener('keydown', resumeAudio);
+        }
+      }
+      document.getElementById('canvas').addEventListener('click', resumeAudio);
+      document.addEventListener('keydown', resumeAudio);
     </script>
-    <script async type="text/javascript" src="sm64.us.f3dex2e.js"></script>
+
     <script>
+      function resizeCanvas() {
+        const canvas = document.getElementById('canvas');
+        const container = document.querySelector('.centerbox');
+        const gameAspect = 640 / 480;
+        
+        if (window.innerWidth / window.innerHeight > gameAspect) {
+          canvas.style.width = 'auto';
+          canvas.style.height = '100vh';
+        } else {
+          canvas.style.width = '100vw';
+          canvas.style.height = 'auto';
+        }
+      }
+
+      function constrainToIntegerScale() {
+        const canvas = document.getElementById('canvas');
+        let scale = 1;
+        
+        while (true) {
+          const testScale = scale + 1;
+          const testWidth = 640 * testScale;
+          const testHeight = 480 * testScale;
+          
+          if (testWidth > window.innerWidth || testHeight > window.innerHeight) {
+            break;
+          }
+          scale = testScale;
+        }
+        
+        canvas.style.width = (640 * scale) + 'px';
+        canvas.style.height = (480 * scale) + 'px';
+      }
+
+      window.addEventListener('load', () => {
+        constrainToIntegerScale();
+      });
+
+      window.addEventListener('resize', () => {
+        constrainToIntegerScale();
+      });
     </script>
+<script>
+// =============================================
+// OPTIMIZED KEY REMAPPING SYSTEM (SILENT MODE)
+// =============================================
+function installKeyRemapping() {
+  const canvas = document.getElementById('canvas');
+  if (!canvas) return;
+
+  // Key remapping configuration
+  const keyRemap = {
+    ' ': {key: 'z', code: 'KeyZ', keyCode: 90},
+    'e': {key: 'x', code: 'KeyX', keyCode: 88},
+    'a': {key: 'ArrowLeft', code: 'ArrowLeft', keyCode: 37},
+    'd': {key: 'ArrowRight', code: 'ArrowRight', keyCode: 39},
+    's': {key: 'ArrowDown', code: 'ArrowDown', keyCode: 40},
+    'w': {key: 'ArrowUp', code: 'ArrowUp', keyCode: 38},
+    'f': {key: 'a', code: 'KeyA', keyCode: 65},
+    'g': {key: 's', code: 'KeyS', keyCode: 83},
+    'm': {key: 'w', code: 'KeyW', keyCode: 87}
+  };
+
+  // Make canvas focusable
+  canvas.tabIndex = 0;
+  canvas.style.outline = 'none';
+  canvas.focus();
+
+  // Cache frequently used values
+  const KEY_DOWN = 'keydown';
+  const KEY_UP = 'keyup';
+  const CAPTURE = true;
+
+  // Event handler
+  function handleKeyEvent(e) {
+    const remap = keyRemap[e.key];
+    if (!remap) return;
+
+    e.preventDefault();
+    e.stopImmediatePropagation();
+
+    // Create optimized event
+    const newEvent = new KeyboardEvent(e.type, {
+      key: remap.key,
+      code: remap.code,
+      keyCode: remap.keyCode,
+      which: remap.keyCode,
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      altKey: e.altKey,
+      ctrlKey: e.ctrlKey,
+      shiftKey: e.shiftKey,
+      metaKey: e.metaKey
+    });
+
+    // Dispatch silently
+    canvas.dispatchEvent(newEvent);
+    if (Module && Module.canvas) {
+      Module.canvas.dispatchEvent(newEvent);
+    }
+  }
+
+  // Add efficient listeners
+  canvas.addEventListener(KEY_DOWN, handleKeyEvent, CAPTURE);
+  canvas.addEventListener(KEY_UP, handleKeyEvent, CAPTURE);
+
+  // Maintain focus with optimized intervals
+  let lastFocusCheck = 0;
+  function checkFocus(now) {
+    if (now - lastFocusCheck > 1000) {
+      if (document.activeElement !== canvas) {
+        canvas.focus();
+      }
+      lastFocusCheck = now;
+    }
+    requestAnimationFrame(checkFocus);
+  }
+  document.addEventListener('click', () => canvas.focus());
+  requestAnimationFrame(checkFocus);
+}
+
+if (document.readyState === 'complete') {
+  installKeyRemapping();
+} else {
+  window.addEventListener('load', installKeyRemapping, {once: true});
+}
+</script>
+
+    <script async type="text/javascript" src="sm64.us.f3dex2e.js"></script>
   </body>
 </html>
-
-
-
